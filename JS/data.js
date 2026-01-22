@@ -1,4 +1,4 @@
-// Catálogo demo (puedes cambiar nombres/imágenes por lo que quieras)
+// Catálogo demo (se pueden cambiar nombres/imágenes por lo que se desee)
 window.PRODUCTS = [
   { id: "p1", name: "UI Kit — Dark Dashboard", price: 19, category: "UI Kits", tag: "Dashboard", img: "" },
   { id: "p2", name: "Plantilla Landing Pro", price: 12, category: "Plantillas", tag: "Landing", img: "" },

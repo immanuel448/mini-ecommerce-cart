@@ -1,11 +1,15 @@
+// Atajo tipo jQuery: $("#id") o $(".clase")
+// Reduce repetición de document.querySelector(...)
 const $ = (sel) => document.querySelector(sel);
 
+// Estado global de la app (single source of truth)
 const state = {
-  products: window.PRODUCTS || [],
-  filtered: [],
-  cart: readCart(), // { [productId]: qty }
+  products: window.PRODUCTS || [], // Catálogo (viene de data.js)
+  filtered: [], // Resultado tras aplicar filtros/ordenamiento
+  cart: readCart(), // Carrito persistido: { [productId]: qty }
 };
 
+// Formatea números como moneda MXN (para precios y totales)
 function formatMoney(n) {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -14,30 +18,37 @@ function formatMoney(n) {
   }).format(n);
 }
 
+// Obtiene categorías únicas del catálogo y las ordena A-Z
 function getCategories(products) {
   return Array.from(new Set(products.map((p) => p.category))).sort((a, b) =>
     a.localeCompare(b)
   );
 }
 
+// Muestra un toast (Bootstrap) con un mensaje corto
 function showToast(msg) {
   const toastEl = $("#toast");
   $("#toastMsg").textContent = msg;
+
+  // Reutiliza la instancia si ya existe
   const toast = bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 1600 });
   toast.show();
 }
 
+// Cuenta total de items en el carrito (suma de cantidades)
 function getCartCount() {
   return Object.values(state.cart).reduce((sum, qty) => sum + qty, 0);
 }
 
+// Agrega 1 unidad al carrito para un producto
 function addToCart(productId) {
   state.cart[productId] = (state.cart[productId] || 0) + 1;
-  saveCart(state.cart);
-  renderCartBadge();
+  saveCart(state.cart);     // Persistencia
+  renderCartBadge();        // UI (contador)
   showToast("Producto agregado al carrito");
 }
 
+// Ajusta cantidad (si queda <=0, elimina el producto del carrito)
 function setQty(productId, qty) {
   if (qty <= 0) {
     delete state.cart[productId];
@@ -46,9 +57,10 @@ function setQty(productId, qty) {
   }
   saveCart(state.cart);
   renderCartBadge();
-  renderCartModal();
+  renderCartModal(); // Re-render del modal para reflejar cambios
 }
 
+// Elimina un producto del carrito
 function removeItem(productId) {
   delete state.cart[productId];
   saveCart(state.cart);
@@ -57,19 +69,24 @@ function removeItem(productId) {
   showToast("Producto eliminado");
 }
 
+// Renderiza el contador del carrito (badge del botón)
 function renderCartBadge() {
   $("#cartCount").textContent = String(getCartCount());
 }
 
+// Lee UI de filtros (buscar/categoría/orden) y actualiza state.filtered
 function applyFilters() {
   const q = $("#searchInput").value.trim().toLowerCase();
   const cat = $("#categorySelect").value;
   const sort = $("#sortSelect").value;
 
+  // Copia para no mutar el arreglo original
   let list = [...state.products];
 
+  // Filtro por categoría
   if (cat !== "all") list = list.filter((p) => p.category === cat);
 
+  // Filtro por búsqueda (name/category/tag)
   if (q) {
     list = list.filter((p) => {
       const hay = `${p.name} ${p.category} ${p.tag}`.toLowerCase();
@@ -77,6 +94,7 @@ function applyFilters() {
     });
   }
 
+  // Ordenamientos opcionales
   if (sort === "price-asc") list.sort((a, b) => a.price - b.price);
   if (sort === "price-desc") list.sort((a, b) => b.price - a.price);
   if (sort === "name-asc") list.sort((a, b) => a.name.localeCompare(b.name));
@@ -84,6 +102,7 @@ function applyFilters() {
   state.filtered = list;
 }
 
+// Renderiza cards de productos en el grid según state.filtered
 function renderProducts() {
   const grid = $("#productsGrid");
   grid.innerHTML = "";
@@ -95,6 +114,7 @@ function renderProducts() {
     const col = document.createElement("div");
     col.className = "col-12 col-sm-6 col-lg-3";
 
+    // Card del producto
     col.innerHTML = `
       <div class="card h-100 bg-black border border-secondary">
         <div class="card-body d-flex flex-column">
@@ -118,12 +138,13 @@ function renderProducts() {
     grid.appendChild(col);
   });
 
-  // Eventos "Agregar"
+  // Bind eventos "Agregar" (después de renderizar)
   grid.querySelectorAll("[data-add]").forEach((btn) => {
     btn.addEventListener("click", () => addToCart(btn.dataset.add));
   });
 }
 
+// Renderiza el contenido del modal del carrito (tabla + totales)
 function renderCartModal() {
   const tbody = $("#cartTbody");
   const cartIds = Object.keys(state.cart);
@@ -131,6 +152,7 @@ function renderCartModal() {
   const empty = $("#cartEmpty");
   const listWrap = $("#cartList");
 
+  // Estado vacío
   if (cartIds.length === 0) {
     empty.classList.remove("d-none");
     listWrap.classList.add("d-none");
@@ -139,6 +161,7 @@ function renderCartModal() {
     return;
   }
 
+  // Estado con items
   empty.classList.add("d-none");
   listWrap.classList.remove("d-none");
 
@@ -149,7 +172,7 @@ function renderCartModal() {
 
   cartIds.forEach((id) => {
     const product = state.products.find((p) => p.id === id);
-    if (!product) return;
+    if (!product) return; // Por seguridad si cambió el catálogo
 
     const qty = state.cart[id];
     const sub = qty * product.price;
@@ -182,10 +205,11 @@ function renderCartModal() {
     tbody.appendChild(tr);
   });
 
+  // Totales
   $("#cartItems").textContent = String(totalItems);
   $("#cartTotal").textContent = formatMoney(total);
 
-  // Eventos cantidad y quitar
+  // Bind eventos dentro del modal (incrementar/decrementar/quitar)
   tbody.querySelectorAll("[data-inc]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.dataset.inc;
@@ -205,8 +229,9 @@ function renderCartModal() {
   });
 }
 
+// Conecta eventos UI (inputs, selects, botones, modal)
 function initControls() {
-  // Categorías
+  // 1) Llenar select de categorías dinámicamente
   const categories = getCategories(state.products);
   const sel = $("#categorySelect");
   categories.forEach((c) => {
@@ -216,6 +241,7 @@ function initControls() {
     sel.appendChild(opt);
   });
 
+  // 2) Cada cambio aplica filtros y re-renderiza productos
   const onChange = () => {
     applyFilters();
     renderProducts();
@@ -225,6 +251,7 @@ function initControls() {
   $("#categorySelect").addEventListener("change", onChange);
   $("#sortSelect").addEventListener("change", onChange);
 
+  // 3) Reset de filtros
   $("#btnReset").addEventListener("click", () => {
     $("#searchInput").value = "";
     $("#categorySelect").value = "all";
@@ -234,7 +261,7 @@ function initControls() {
     showToast("Filtros reiniciados");
   });
 
-  // Carrito acciones
+  // 4) Acciones del carrito
   $("#btnClearCart").addEventListener("click", () => {
     if (!confirm("¿Vaciar carrito?")) return;
     state.cart = {};
@@ -253,16 +280,17 @@ function initControls() {
     showToast("Compra simulada completada ✅");
   });
 
-  // Cuando abres el modal, renderiza
+  // 5) Al abrir el modal, renderiza el contenido actualizado
   const modal = document.getElementById("cartModal");
   modal.addEventListener("show.bs.modal", () => renderCartModal());
 }
 
+// Inicialización general (arranque)
 function init() {
-  applyFilters();
-  renderProducts();
-  renderCartBadge();
-  initControls();
+  applyFilters();      // Calcula state.filtered desde el inicio
+  renderProducts();    // Pinta catálogo inicial
+  renderCartBadge();   // Pinta contador inicial desde LocalStorage
+  initControls();      // Conecta eventos
 }
 
-init();
+init(); // Ejecuta la app
